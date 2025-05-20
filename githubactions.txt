@@ -1,0 +1,512 @@
+Fontos! Nem töltöttem fel az összes fájlt, csak párat.
+# Bevezetés----------------------------------------------------------------------------------------
+Áttekintés:
+A GitHub Actions használatával automatizálhatjuk a teljes CI/CD folyamatot:
+
+GitHub repo ➝ GitHub Action workflow ➝ Tesztelés (Maven, SonarQube/SonarCloud)
+          ⬇
+       Build & deploy:
+       ➝ Docker image build
+       ➝ Push to AWS ECR
+       ➝ ECS + Load Balancer + RDS
+       ⬇
+    Elérhető alkalmazás a felhasználók számára
+
+Főbb lépések a workflow során:
+  1. GitHub beállítás: Forkolás, SSH-kulcs, VSCode integráció
+  2. Kód tesztelése: Workflow & job, Maven, Checkstyle, Sonar Scanner, SonarCloud
+  3. Build & push Docker image: Docker image építés és feltöltés AWS ECR-re
+  4. Deploy ECS-be: ECS task definiálás és futtatás, kapcsolódás RDS adatbázishoz
+
+# GitHub Beállítás---------------------------------------------------------------------------------
+1. SSH-kulcs létrehozása
+
+cd ~
+pwd                                # Ellenőrizd, hogy a saját home könyvtáradban vagy
+cd ~/.ssh
+ssh-keygen                         # Adj meg github nevet, pl.: Krissz91
+
+Két fájl fog létrejönni: Krissz91 (private key) és Krissz91.pub (public key)
+Másold ki a .pub fájl tartalmát:
+
+cat Krissz91.pub
+
+2. SSH-kulcs hozzáadása GitHub-hoz
+  Lépj be a GitHub fiókodba
+  Navigálj ide: Settings -> SSH and GPG keys -> New SSH key
+    Title: pl. pinacolada (teljesen mindegy mit adsz)
+    Key: ide illeszd be a .pub fájl tartalmát
+    Add SSH Key
+
+3. Kapcsolat tesztelése GitHub-bal
+
+ssh -i ~/.ssh/Krissz91 -T git@github.com
+
+Ha minden jól ment: "You've successfully authenticated"
+
+4. Repository forkolása és klónozása
+  Nyisd meg: https://github.com/hkhcoder/hprofile
+  Ellenőrizd, hogy be vagy jelentkezve
+  Kattints a Fork gombra -> ne jelöld be a „Copy the …” opciót -> Create fork
+
+Terminálban:
+
+export GIT_SSH_COMMAND="ssh -i ~/.ssh/Krissz91"
+mkdir -p /g/Git/actions
+cd /g/Git/actions
+git clone git@github.com:Krissz91/hprofile.git
+cd hprofile
+
+5. Git beállítása
+
+unset GIT_SSH_COMMAND
+git config core.sshCommand "ssh -i ~/.ssh/Krissz91 -F /dev/null"
+git config user.name "Krissz91"
+git config user.email "user.name@gmail.com"
+cat .git/config   # Ellenőrizheted, hogy minden be van állítva
+
+6. VSCode megnyitása
+
+code .
+
+Alternatíva: File > Open Folder -> navigálj a hprofile mappához
+
+7. Teszt push (kapcsolat ellenőrzéséhez)
+  Nyisd meg a README.md fájlt
+  Vegyél ki egy-két # jelet
+  Mentsd el: Ctrl + S
+
+Git GUI:
+  Kattints a Source Control ikonra
+  Commit & Push
+  Adj meg egy üzenetet pl. test integration
+
+Git CLI:
+
+git add .
+git commit -m "test integration"
+git push origin main
+
+Lépj vissza a GitHub repo oldalára, frissítsd — a módosítás látható lesz
+
+# GitHub Actions áttekintés------------------------------------------------------------------------
+Első workflow létrehozása
+  Nyisd meg a GitHub repódat (amit forkoltál)
+  Navigálj a "Actions" fülre
+  Válaszd a "Set up a workflow yourself" opciót
+
+Írd be az alábbi példát:
+
+name: Hprofile Actions
+on: workflow_dispatch
+
+jobs:
+  Testing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Testing workflow
+        run: echo "Workflow works!"
+
+  Kattints a Commit changes gombra
+  Lépj vissza az Actions fülre -> Válaszd ki a Hprofile Actions workflow-t -> Run workflow
+  Ha zöld pipa jelenik meg akkor működik!
+
+VSCode ellenőrzés
+  Megjelenik a .github/workflows mappa main.yml fájlal
+  Ha nem látod: alul a VSCode-ban kattints a frissítés ikonra
+
+# Kód tesztelése workflow-ban----------------------------------------------------------------------
+Frissítsd a meglévő main.yml fájlt az alábbiak szerint:
+  Nyisd meg a GitHub Marketplace oldalt
+  Keresd meg: checkout
+  Másold ki az ajánlott uses sort: actions/checkout@v4
+
+Frissített workflow:
+
+name: Hprofile Actions
+on: workflow_dispatch
+
+jobs:
+  Testing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v4
+
+      - name: Maven test
+        run: mvn test
+
+      - name: Checkstyle
+        run: mvn checkstyle:checkstyle
+
+Commit és push
+
+VSCode GUI:
+  Ctrl + S mentés
+  Source Control -> Commit & Push
+  Üzenet: mvn code analysis in workflow
+
+Vagy terminálból:
+  git add .
+  git commit -m "mvn code analysis in workflow"
+  git push origin main
+
+Lépj vissza a GitHub oldalra -> Actions -> Futtasd újra a workflow-t -> Zöld pipa akkor minden rendben.
+
+# SonarCloud kódellenőrzés-------------------------------------------------------------------------
+1. Regisztráció SonarCloud-on
+  Lépj be: https://www.sonarsource.com/products/sonarcloud
+  Jelentkezz be GitHub fiókoddal
+  Kizárólag a hprofile repo-hoz adj hozzáférést
+  Ezután elérhető lesz: https://sonarcloud.io/projects
+
+2. Új projekt és szervezet létrehozása
+Felső menüben a plusz jelre kattints -> Create new organization ->
+
+Create manually
+  Organization name: hprofile
+  Key: pl. hprofile3391 (légy egyedi!)
+  Plan: Free -> Create
+
+-> Analyze new project
+
+  Organization: hprofile
+  Display Name: actionscode
+  Project Key: hprofile3391_actionscode
+  Visibility: Public -> Next -> Previous version -> Create project
+
+3. Token létrehozása és hozzáadása GitHub-hoz
+A SonarCloud-on:
+  Fiók ikon -> My Account -> Security
+  Token neve: githubaction
+  -> Generate Token -> másold ki!
+
+A GitHub repóban:
+Navigálj ide:
+Settings -> Secrets and variables -> Actions fülön!
+Add meg az alábbi Secret-eket:
+
+Név                     Érték
+SONAR_URL               https://sonarcloud.io/
+SONAR_TOKEN             <generált token>
+SONAR_ORGANIZATION      hprofile3391
+SONAR_PROJECT_KEY       hprofile3391_hprofile
+
+A SonarCloud-on is:
+Administration -> Organization settings -> Name mezőt egészítsd ki a számoddal -> Save
+
+4. Workflow kiegészítése Sonar támogatással
+Marketplace-en keress: sonar scanner
+
+Használj példát az Example usage részből. Az alábbi verzió javasolt:
+
+name: Hprofile Actions
+on: workflow_dispatch
+
+jobs:
+  Testing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code checkout
+        uses: actions/checkout@v4
+
+      - name: Maven test
+        run: mvn test
+
+      - name: Checkstyle
+        run: mvn checkstyle:checkstyle
+
+      - name: Set Java 11
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Setup SonarQube
+        uses: warchant/setup-sonar-scanner@v7
+
+      - name: SonarQube Scan
+        run: |
+          sonar-scanner \
+            -Dsonar.host.url=${{ secrets.SONAR_URL }} \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
+            -Dsonar.sources=src/ \
+            -Dsonar.junit.reportsPath=target/surefire-reports/ \
+            -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+            -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml \
+            -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/
+
+Commit & push
+
+VSCode GUI:
+  Ctrl + S mentés
+  Source Control -> Commit & Push
+  Üzenet: Sonar code analysis in workflows
+
+git add .
+git commit -m "Sonar code analysis in workflows"
+git push origin main
+
+Végül: GitHub -> Actions -> Futtasd a workflow-t -> Ha lefut, a SonarCloud-on is megjelenik az elemzés eredménye.
+
+# Code Quality Gates-------------------------------------------------------------------------------
+Cél:
+Beállítani a SonarCloud-ban egy minőségi küszöböt (quality gate),
+amely automatikusan figyeli a hibák számát,
+és hibát jelez a GitHub Action futás során, ha az átlépi a határt.
+
+Lépések:
+  Látogass el ide: https://sonarcloud.io/projects
+  Kattints a projektedre: hprofile3391_hprofile -> main branch -> itt látod az elemzési adatokat (pl. bugs, vulnerabilities).
+  Jobb felső sarok: My Organizations -> válaszd hprofile3391
+  Navigálj: Quality Gates -> Create
+  Név: ActionQG
+  Add condition:
+    On overall Code -> Bugs -> Value = 30
+  Minden más feltételt törölj (ha van).
+  Vissza: My Projects -> válaszd hprofile3391_hprofile
+  Administration -> Quality Gate -> állítsd át az ActionQG-re
+  Nyisd meg: GitHub Marketplace
+    Keresés: sonar quality gate
+    Válaszd: SonarQube Quality Gate Check
+
+YAML fájl kiegészítése (main.yml végére):
+
+      # Check the Quality Gate status.
+      - name: SonarQube Quality Gate check
+        id: sonarqube-quality-gate-check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_URL }}
+
+Commit & Push:
+VSCode-on keresztül:
+
+VSCode GUI:
+  Ctrl + S mentés
+  Source Control -> Commit & Push
+  Üzenet: Quality gate check in workflow
+
+vagy terminálban
+
+git add .
+git commit -m "Quality gate check in workflow"
+git push origin main
+
+Tesztelés:
+  GitHub -> Actions -> Hprofile Actions -> Run workflow
+  Mivel 35 hiba van és a küszöb 30 -> piros lesz.
+  Menj vissza SonarCloud-ra, állítsd vissza a Quality Gate-et default-ra -> újra Run workflow -> zöld pipa lesz.
+
+# AWS: IAM, ECR & RDS------------------------------------------------------------------------------
+Cél:
+Beállítani AWS erőforrásokat: IAM user-t, ECR repót a Docker image-nek,
+RDS-t adatbázishoz, majd előkészíteni titkos kulcsokat GitHub Action-ök futtatásához.
+
+IAM – Hozzáférés létrehozása GitHub számára:
+  AWS Console -> IAM -> Users -> Create user
+  Név: githubactions
+  Jogosultság: Attach policies directly
+    AmazonEC2ContainerRegistryFullAccess
+    AmazonECS_FullAccess
+  Create user -> Katt a user nevére -> Security credentials
+  Create access key -> CLI kiválasztása -> pipáld ki az elfogadást -> Download .csv
+
+ECR – Docker Image Repository létrehozása:
+  AWS Console -> ECR -> Create repository
+  Név: actapp (private maradhat)
+  View push commands -> az 1. pontban levő URL-ből másold ki az Account ID-t
+
+RDS – Adatbázis létrehozása:
+  AWS -> RDS -> Create database
+  Beállítások:
+    Engine: MySQL 8.0.33
+    Template: Free tier
+    DB instance ID: vproapp-actions
+    Username: admin
+    Password: automatikusan generált
+    DB name: accounts
+    Storage: 20 GB / gp2
+    Availability: Single-AZ
+    Security Group: vproappRDS-actions-sg (új)
+  Create database -> View credential details -> mentsd el a jelszót és endpoint-ot
+
+EC2 – Csatlakozás MySQL klienssel:
+EC2 -> Launch instance:
+  Név: mysqlclient
+  OS: Ubuntu
+  Key pair: mysqlclientkey.pem
+  Security group: mysql-client-sg (inbound: SSH, MyIP)
+Indítsd el -> Másold a public IPv4 címet
+
+Terminálon:
+
+ssh -i Downloads/mysqlclientkey.pem ubuntu@<ec2-public-ipv4>
+sudo -i
+apt update && apt install mysql-client -y
+
+RDS security group (vproappRDS-actions-sg) -> Inbound:
+  Add rule -> Port: 3306 -> Source: mysql-client-sg
+Tesztkapcsolat:
+
+mysql -h <rds-endpoint> -u admin -p<JELSZO>
+
+DB Feltöltés:
+Klónozd a projektet:
+
+git clone https://github.com/hkhcoder/vprofile-project.git
+cd vprofile-project/
+mysql -h <rds-endpoint> -u admin -p<JELSZO> accounts < src/main/resources/db_backup.sql
+
+Ellenőrizd, hogy létrejöttek-e a táblák:
+
+mysql -h <rds-endpoint> -u admin -p<JELSZO> accounts
+show tables;
+exit
+
+EC2 takarítás:
+  EC2 -> terminate instance
+
+GitHub Secrets Beállítása:
+Menj a repo beállításaihoz:
+https://github.com/Krissz91/hprofile/settings -> Secrets and variables -> Actions
+
+Hozz létre ezeket:
+
+Secret Name             Érték
+AWS_ACCESS_KEY_ID       .csv fájlból
+AWS_SECRET_ACCESS_KEY   .csv fájlból
+AWS_ACCOUNT_ID          12 jegyű számsor az ECR URL-ből
+REGISTRY                123456789012.dkr.ecr.us-east-1.amazonaws.com
+RDS_USER                admin
+RDS_PASS                RDS jelszó (20 karakteres)
+RDS_ENDPOINT            RDS endpoint (amazonaws.com-ra végződik)
+
+# Docker Build & Publish to ECR--------------------------------------------------------------------
+Cél: A projektből Docker image készítése, majd feltöltése az AWS ECR (Elastic Container Registry)-be.
+
+Lépések:
+  1. GitHub Actions sablon hozzáadása:
+    Nyisd meg a GitHub Marketplace-et.
+    Keresd meg: ecr.
+    Válaszd a „Docker ECR” sablont, azon belül az Upload docker image to
+    Amazon Elastic Container Registry (ECR) részt, majd másold a workflow snippetet a yaml fájlod végére.
+
+  2. Egyéni lépések hozzáadása:
+    Maven teszt és Checkstyle futtatás.
+    SonarQube integráció (minőségellenőrzés).
+    Java 11 beállítása a sonar-scanner futtatásához.
+
+  3. Docker image build és feltöltés:
+    application.properties frissítése secrets segítségével.
+    Docker image készítés és push az ECR-be az appleboy/docker-ecr-action segítségével.
+
+# ECS Setup----------------------------------------------------------------------------------------
+Cél: Az image deploy-olásához szükséges ECS (Elastic Container Service) infrastruktúra létrehozása AWS-ben.
+
+Lépések:
+  1. Cluster létrehozása:
+    AWS > ECS > Clusters > Create Cluster
+    Név: vproapp-act91
+    Tag: Name = vproapp-act91
+
+  2. Task Definition létrehozása:
+    Név: vproapp-act91-tdef
+    Memória: 2 GB
+    Role: vproapp (újként létrehozva)
+    Image URL: az ECR „View push commands” részéből másold ki
+    Port: 8080
+
+  3. Task execution role jogosultságainak bővítése:
+    IAM -> Role -> vproapp -> Add permissions -> Attach -> CloudWatchLogsFullAccess
+
+  4. Service létrehozása:
+    Név: vproapp-act-svc
+    Security group: engedélyezze a 8080-as és HTTP forgalmat
+    Load balancer: Application Load Balancer beállítása
+    Health check path: /login
+    Target group: vproapp-act-tg
+
+  5. Tesztelés:
+    EC2 -> Security group: Add Custom TCP 3306 szabály a vproapp-act-svc-sg számára, hogy az RDS elérhető legyen
+    Teszteld az alkalmazást a load balancer DNS nevével (HTTP)
+
+# Deploy – GitHub Actions-ből ECS-re---------------------------------------------------------------
+Cél: Automatikus deploy GitHub Actions-ből az ECS szolgáltatásba.
+
+Lépések:
+  1. Task definition JSON fájl létrehozása:
+    AWS ECS -> Task Definition -> JSON nézet -> másolás
+    VS Code -> aws-files/taskdeffile.json létrehozása és fájlba beillesztése
+
+  2. GitHub Actions deploy szekció hozzáadása:
+
+Deploy:
+  needs: BUILD_AND_PUBLISH
+  runs-on: ubuntu-latest
+  steps:
+    - name: Code checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Fill in the new image ID in the Amazon ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: ${{ env.ECS_TASK_DEFINITION }}
+        container-name: ${{ env.CONTAINER_NAME }}
+        image: ${{ secrets.REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.run_number }}
+
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true
+
+  3.Workflow aktiválása push eseményre is:
+
+on: [push, workflow_dispatch]
+
+Összefoglaló – GitHub Actions Workflow YAML fájl
+Környezeti változók:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: actapp
+  ECS_SERVICE: vproapp-act-svc
+  ECS_CLUSTER: vproapp-act
+  ECS_TASK_DEFINITION: aws-files/taskdeffile.json
+  CONTAINER_NAME: vproapp
+
+Három fő job:
+1. Testing:
+    Tesztelés (JUnit), Checkstyle, SonarQube elemzés.
+
+2. BUILD_AND_PUBLISH:
+    Alkalmazás konfigurálása, Docker image build és ECR-be push.
+
+3. Deploy:
+    Task definition frissítése az új image ID-val.
+    Deploy az ECS-re.
+    Várakozás a szolgáltatás stabilizálódására.
+
+Hozzáférés
+Miután minden sikeresen deploy-olva lett:
+  Nyisd meg az ECS -> Service -> Load balancer DNS-t
+  Példa: http://vproapp-act-elb-123456.us-east-1.elb.amazonaws.com
+
+Belépés:
+Felhasználó: admin_vp
+Jelszó: admin_vp
