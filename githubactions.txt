@@ -45,7 +45,7 @@ ssh -i ~/.ssh/Krissz91 -T git@github.com
 Ha minden jól ment: "You've successfully authenticated"
 
 4. Repository forkolása és klónozása
-  Nyisd meg: https://github.com/hkhcoder/hprofile
+  Nyisd meg: https://github.com/username/hprofile
   Ellenőrizd, hogy be vagy jelentkezve
   Kattints a Fork gombra -> ne jelöld be a „Copy the …” opciót -> Create fork
 
@@ -358,7 +358,7 @@ mysql -h <rds-endpoint> -u admin -p<JELSZO>
 DB Feltöltés:
 Klónozd a projektet:
 
-git clone https://github.com/hkhcoder/vprofile-project.git
+git clone https://github.com/username/vprofile-project.git
 cd vprofile-project/
 mysql -h <rds-endpoint> -u admin -p<JELSZO> accounts < src/main/resources/db_backup.sql
 
