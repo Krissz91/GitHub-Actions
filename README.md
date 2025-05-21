@@ -75,7 +75,7 @@ A main.yml fájl három fő job-ból áll:
 
 # Automatikus futás:
 
-"on: [push, workflow_dispatch]"
+main.yml -> "on: [push, workflow_dispatch]"
 
 A workflow automatikusan lefut, ha:
 

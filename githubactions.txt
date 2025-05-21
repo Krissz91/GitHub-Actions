@@ -1,4 +1,4 @@
-Fontos! Nem töltöttem fel az összes fájlt, csak párat.
+Csak a main.yml fájlt töltöttem fel
 # Bevezetés----------------------------------------------------------------------------------------
 Áttekintés:
 A GitHub Actions használatával automatizálhatjuk a teljes CI/CD folyamatot:
