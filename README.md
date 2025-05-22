@@ -80,4 +80,3 @@ main.yml -> "on: [push, workflow_dispatch]"
 A workflow automatikusan lefut, ha:
 
 - Commit érkezik a main ágra
-- Kézzel indítod workflow_dispatch-el
