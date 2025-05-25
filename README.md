@@ -1,3 +1,6 @@
+GitHub Actions
+A GitHub Actions egy folyamatos integrációt és folyamatos szállítást (CI/CD) biztosító platform, amely közvetlenül a GitHub adattárakba integrálódik. Lehetővé teszi a fejlesztők számára a szoftver munkafolyamatok automatizálását, beleértve az alkalmazások létrehozását, tesztelését és telepítését. A műveletek YAML fájlokban vannak definiálva, és különféle GitHub események, például push-ok, pull-requestek vagy ütemezett feladatok indítják el őket. A platform előre elkészített műveletek piacterét biztosítja, és támogatja az egyéni műveleteket. A GitHub Actions mátrix-buildeket, párhuzamos feladatvégrehajtást kínál, és több operációs rendszert és nyelvet is támogat. Zökkenőmentesen integrálódik a GitHub ökoszisztémájába, megkönnyítve az automatizált kódfelülvizsgálatot, a problémakövetést és a projektmenedzsmentet. Ez az eszköz lehetővé teszi a fejlesztők számára, hogy hatékonyan alkalmazzák a DevOps gyakorlatokat a GitHub munkafolyamataikban, növelve a termelékenységet és a kódminőséget.
+
 # HProfile Microservice – CI/CD + AWS Deployment
 
 Ez a projekt egy Spring Boot alapú microservice, amely teljes CI/CD folyamaton megy keresztül GitHub Actions segítségével, és AWS felhőbe van deploy-olva (ECR + ECS + ELB + RDS).
